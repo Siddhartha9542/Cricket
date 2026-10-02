@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <title>Novara Fiesta 2026 | Admin Portal</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(3, 7, 18, 0.95);
+      backdrop-filter: blur(15px);
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .action-btn {
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      margin-right: 4px;
+      transition: transform 0.15s ease;
+    }
+    .action-btn:hover { transform: scale(1.05); }
+    .btn-approve { background: #22c55e; color: #000; }
+    .btn-reject { background: #f59e0b; color: #000; }
+    .btn-delete { background: #ef4444; color: #fff; }
+    .btn-export {
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid var(--heading-blue);
+      color: var(--heading-blue);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .btn-export:hover { background: var(--heading-blue); color: #ffffff; }
+    .status-pill {
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+    .status-Verified { background: rgba(34, 197, 94, 0.2); color: #166534; border: 1px solid #22c55e; }
+    .status-Rejected { background: rgba(239, 68, 68, 0.2); color: #991b1b; border: 1px solid #ef4444; }
+    .status-Pending { background: rgba(245, 158, 11, 0.2); color: #92400e; border: 1px solid #f59e0b; }
+  </style>
+</head>
+<body>
+
+  <!-- FIREBASE AUTHENTICATION MODAL -->
+  <div id="authModal" class="modal-overlay">
+    <div class="glass-card" style="max-width: 420px; width: 90%; text-align: center;">
+      <h2 style="color: var(--heading-blue); margin-bottom: 8px;">🔒 Admin Sign In</h2>
+      <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 20px;">Enter Firebase credentials to access dashboard.</p>
+      
+      <form id="loginForm">
+        <div class="input-box">
+          <label style="text-align: left;">Email Address</label>
+          <input type="email" id="adminEmail" placeholder="admin@jntuh.ac.in" required>
+        </div>
+
+        <div class="input-box">
+          <label style="text-align: left;">Password</label>
+          <input type="password" id="adminPassword" placeholder="••••••••" required>
+        </div>
+
+        <button type="submit" id="btnLogin" class="btn-glow">Authenticate →</button>
+      </form>
+
+      <p id="loginError" style="color: #ef4444; font-size: 0.85rem; margin-top: 12px; display: none; word-break: break-word;"></p>
+    </div>
+  </div>
+
+  <header>
+    <div class="logo-box">
+      <h1>NOVARA FIESTA 2026</h1>
+      <span>JNTUH MAHABUBABAD ADMIN</span>
+    </div>
+    <nav class="nav-menu">
+      <a href="index.html" class="nav-link">Register</a>
+      <a href="payment.html" class="nav-link">Pay Fee</a>
+      <a href="admin.html" class="nav-link active">Admin Portal</a>
+      <button id="btnLogout" class="nav-link" style="display: none; background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #f87171; cursor: pointer;">Sign Out</button>
+    </nav>
+  </header>
+
+  <div class="main-wrapper" style="max-width: 1200px;">
+    <div class="glass-card" id="adminDashboard" style="display: none;">
+      
+      <div class="title-header" style="flex-wrap: wrap; gap: 12px;">
+        <span>📋 Team Registrations Portal</span>
+        <div style="display: flex; gap: 10px;">
+          <button id="btnExportAll" class="btn-export">📥 Export All (CSV)</button>
+          <button id="btnExportVerified" class="btn-export" style="border-color: #22c55e; color: #166534;">✅ Export Verified Only</button>
+        </div>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Team Name</th>
+              <th>Year & Branch</th>
+              <th>Captain Details</th>
+              <th>Squad Size</th>
+              <th>UTR Reference</th>
+              <th>Payment Status</th>
+              <th>Admin Action & WhatsApp</th>
+            </tr>
+          </thead>
+          <tbody id="adminTableBody">
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Fetching records from Firestore...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module">
+    import { db, auth, collection, onSnapshot, doc, updateDoc, deleteDoc, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "./firebase-config.js";
+
+    let cachedTeams = [];
+    let unsubscribeSnapshot = null;
+
+    try {
+      onAuthStateChanged(auth, (user) => {
+        try {
+          if (user) {
+            document.getElementById("authModal").style.display = "none";
+            document.getElementById("adminDashboard").style.display = "block";
+            document.getElementById("btnLogout").style.display = "inline-block";
+            initAdminListener();
+          } else {
+            document.getElementById("authModal").style.display = "flex";
+            document.getElementById("adminDashboard").style.display = "none";
+            document.getElementById("btnLogout").style.display = "none";
+            if (unsubscribeSnapshot) {
+              unsubscribeSnapshot();
+              unsubscribeSnapshot = null;
+            }
+          }
+        } catch (innerErr) {
+          console.error("Error processing Auth State Change:", innerErr);
+        }
+      });
+    } catch (err) {
+      console.error("Failed to initialize Auth Observer:", err);
+    }
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      
+      const emailInput = document.getElementById("adminEmail");
+      const passwordInput = document.getElementById("adminPassword");
+      const btn = document.getElementById("btnLogin");
+      const errBox = document.getElementById("loginError");
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+
+      btn.innerText = "Verifying Credentials...";
+      btn.disabled = true;
+      errBox.style.display = "none";
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (err) {
+        let friendlyMessage = err.message;
+        if (err.code === "auth/unauthorized-domain") {
+          friendlyMessage = "Localhost domain not allowed in Firebase Auth settings. Add localhost to Authorized Domains in Firebase Console.";
+        } else if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
+          friendlyMessage = "Invalid email or password.";
+        }
+
+        errBox.innerText = `[${err.code || 'ERROR'}]: ${friendlyMessage}`;
+        errBox.style.display = "block";
+      } finally {
+        btn.innerText = "Authenticate →";
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("btnLogout").addEventListener("click", async () => {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        alert("Sign out error: " + err.message);
+      }
+    });
+
+    function initAdminListener() {
+      try {
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
+
+        // Reading strictly from 'player_registrations'
+        unsubscribeSnapshot = onSnapshot(collection(db, "player_registrations"), (snapshot) => {
+          try {
+            const tableBody = document.getElementById("adminTableBody");
+            tableBody.innerHTML = "";
+            cachedTeams = [];
+
+            if (snapshot.empty) {
+              tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No team registrations found in Firestore database.</td></tr>`;
+              return;
+            }
+
+            snapshot.forEach((docSnap) => {
+              const team = docSnap.data();
+              const id = docSnap.id;
+              cachedTeams.push({ id, ...team });
+
+              const status = team.payment_status || "Pending";
+              const capPhone = team.captain ? team.captain.phone : "";
+              const capName = team.captain ? team.captain.name : "Captain";
+
+              tableBody.innerHTML += `
+                <tr>
+                  <td><strong style="color: var(--heading-blue);">${team.team_name || 'N/A'}</strong></td>
+                  <td>${team.year_group || 'N/A'} (${team.branch || 'N/A'})</td>
+                  <td>${capName}<br><small style="color:var(--text-muted);">${capPhone}</small></td>
+                  <td>${team.players ? team.players.length : 0} Players</td>
+                  <td><code>${team.utr_number || 'N/A'}</code></td>
+                  <td><span class="status-pill status-${status}">${status}</span></td>
+                  <td style="white-space: nowrap;">
+                    <button onclick="updateStatus('${id}', 'Verified', '${capPhone}', '${team.team_name}')" class="action-btn btn-approve">Approve</button>
+                    <button onclick="updateStatus('${id}', 'Rejected', '${capPhone}', '${team.team_name}')" class="action-btn btn-reject">Reject</button>
+                    <button onclick="removeTeam('${id}', '${capPhone}', '${team.team_name}')" class="action-btn btn-delete">Delete</button>
+                  </td>
+                </tr>
+              `;
+            });
+          } catch (renderError) {
+            console.error("DOM Rendering Exception:", renderError);
+          }
+        }, (err) => {
+          console.error("Firestore Snapshot Exception:", err);
+          document.getElementById("adminTableBody").innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444;">Firestore Read Exception: ${err.message}</td></tr>`;
+        });
+      } catch (err) {
+        console.error("Failed to attach Firestore Listener:", err);
+      }
+    }
+
+    window.updateStatus = async (docId, newStatus, phone, teamName) => {
+      try {
+        await updateDoc(doc(db, "player_registrations", docId), { payment_status: newStatus });
+        
+        let msg = "";
+        if (newStatus === "Verified") {
+          msg = `Hello Captain! Your payment for Team *${teamName}* in *Novara Fiesta 2026 JNTUH Mahabubabad* has been *APPROVED*. See you on the field! 🏏`;
+        } else {
+          msg = `Hello Captain! Your payment UTR for Team *${teamName}* in *Novara Fiesta 2026* was *REJECTED* or invalid. Please check and re-submit on the portal.`;
+        }
+
+        openWhatsApp(phone, msg);
+      } catch (err) {
+        console.error("Update Status Exception:", err);
+        alert("Failed to update status in Firestore: " + err.message);
+      }
+    };
+
+    window.removeTeam = async (docId, phone, teamName) => {
+      if (!confirm(`Are you sure you want to delete registration for "${teamName}"?`)) return;
+
+      try {
+        await deleteDoc(doc(db, "player_registrations", docId));
+        const msg = `Notice: Registration for Team *${teamName}* in Novara Fiesta 2026 has been cancelled by the admin.`;
+        openWhatsApp(phone, msg);
+      } catch (err) {
+        console.error("Delete Record Exception:", err);
+        alert("Failed to delete record: " + err.message);
+      }
+    };
+
+    function openWhatsApp(phone, message) {
+      try {
+        if (!phone) return;
+        let cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length === 10) cleanPhone = "91" + cleanPhone;
+        const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+      } catch (err) {
+        console.error("WhatsApp Link Exception:", err);
+      }
+    }
+
+    function exportToCSV(dataList, filename) {
+      try {
+        if (!dataList || dataList.length === 0) {
+          alert("No records available to export!");
+          return;
+        }
+
+        let maxPlayers = 0;
+        dataList.forEach(t => {
+          if (t.players && Array.isArray(t.players)) {
+            if (t.players.length > maxPlayers) maxPlayers = t.players.length;
+          }
+        });
+
+        let headers = [
+          "Registration ID",
+          "Team Name",
+          "Year Group",
+          "Branch",
+          "Captain Name",
+          "Captain Phone",
+          "UTR Number",
+          "Payment Status",
+          "Total Squad Count"
+        ];
+
+        for (let i = 1; i <= maxPlayers; i++) {
+          headers.push(`Player ${i} Name`, `Player ${i} Role`);
+        }
+
+        let csv = headers.map(h => `"${h}"`).join(",") + "\n";
+
+        dataList.forEach(t => {
+          const docId = (t.id || '').replace(/"/g, '""');
+          const teamName = (t.team_name || '').replace(/"/g, '""');
+          const year = (t.year_group || '').replace(/"/g, '""');
+          const branch = (t.branch || '').replace(/"/g, '""');
+          const capName = (t.captain ? t.captain.name : '').replace(/"/g, '""');
+          
+          const capPhone = t.captain && t.captain.phone ? `\t${t.captain.phone}` : '';
+          const utrNumber = t.utr_number ? `\t${t.utr_number}` : '';
+          const status = (t.payment_status || 'Pending').replace(/"/g, '""');
+          const squadCount = t.players ? t.players.length : 0;
+
+          let row = [
+            `"${docId}"`,
+            `"${teamName}"`,
+            `"${year}"`,
+            `"${branch}"`,
+            `"${capName}"`,
+            `"${capPhone}"`,
+            `"${utrNumber}"`,
+            `"${status}"`,
+            `"${squadCount}"`
+          ];
+
+          const players = t.players || [];
+          for (let i = 0; i < maxPlayers; i++) {
+            if (i < players.length) {
+              const p = players[i];
+              const pName = (p.name || '').replace(/"/g, '""');
+              const pRole = (p.role || 'Player').replace(/"/g, '""');
+              row.push(`"${pName}"`, `"${pRole}"`);
+            } else {
+              row.push('""', '""');
+            }
+          }
+
+          csv += row.join(",") + "\n";
+        });
+
+        const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.setAttribute('href', url);
+        a.setAttribute('download', `${filename}.csv`);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+      } catch (err) {
+        console.error("CSV Export Exception:", err);
+        alert("Failed to generate CSV export: " + err.message);
+      }
+    }
+
+    document.getElementById("btnExportAll").addEventListener("click", () => {
+      exportToCSV(cachedTeams, "Novara_Fiesta_All_Registrations");
+    });
+
+    document.getElementById("btnExportVerified").addEventListener("click", () => {
+      const verifiedOnly = cachedTeams.filter(t => t.payment_status === "Verified");
+      exportToCSV(verifiedOnly, "Novara_Fiesta_Verified_Registrations");
+    });
+  </script>
+</body>
+</html>

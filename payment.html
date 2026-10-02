@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <title>Novara Fiesta 2026 | Payment</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+
+  <canvas id="bg-canvas"></canvas>
+
+  <header>
+    <div class="logo-box">
+      <h1>NOVARA FIESTA 2026</h1>
+      <span>JNTUH MAHABUBABAD</span>
+    </div>
+    <nav class="nav-menu">
+      <a href="index.html" class="nav-link">Register</a>
+      <a href="payment.html" class="nav-link active">Pay Fee</a>
+      <a href="admin.html" class="nav-link">Admin Portal</a>
+    </nav>
+  </header>
+
+  <div class="main-wrapper">
+    <div class="glass-card" style="text-align: center;">
+      
+      <div class="title-header" style="justify-content: center;">
+        <span>💳 Step 2 / Scan UPI QR Code</span>
+      </div>
+
+      <p style="color: var(--text-muted); margin-bottom: 20px;">
+        Entry Fee: <strong style="color: var(--heading-blue); font-size: 1.2rem;">₹1,100</strong>
+      </p>
+
+      <div style="background: #fff; padding: 15px; border-radius: 16px; width: max-content; margin: 0 auto 20px; box-shadow: var(--shadow-extruded-small);">
+        <img id="qrImg" src="images/qr-upi.png" onerror="this.onerror=null; this.src='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=upi://pay?pa=yatasiddhartha33-2@oksbi%26pn=NovaraFiesta%26am=1100.00%26cu=INR';" alt="UPI QR" style="width: 220px; height: 220px; display: block;">
+      </div>
+
+      <div style="background: var(--bg-main); border: 1px dashed var(--heading-blue); padding: 10px 20px; border-radius: 10px; display: inline-block; margin-bottom: 25px; box-shadow: var(--shadow-inset);">
+        UPI ID: <strong style="color: var(--heading-blue);">yatasiddhartha33-2@oksbi</strong>
+      </div>
+
+      <form id="payForm" style="max-width: 450px; margin: 0 auto; text-align: left;">
+        <div class="input-box">
+          <label for="utrNo">12-Digit Transaction UTR Number</label>
+          <input type="text" id="utrNo" name="utrNo" placeholder="e.g. 426810293847" pattern="[0-9]{12}" maxlength="12" required>
+        </div>
+
+        <button type="submit" id="btnPay" class="btn-glow">Complete Registration →</button>
+      </form>
+
+      <div id="statusBox" style="display: none; margin-top: 25px; padding: 25px; background: var(--status-verified-bg); border: 1px solid var(--status-verified-text); border-radius: 16px;">
+        <h3 style="color: var(--status-verified-text);">🎉 Payment Details Saved to Database!</h3>
+        <p style="color: var(--text-main); margin-top: 8px;">Your registration reference has been stored. The JNTUH Mahabubabad Tournament Admin will verify your UTR shortly.</p>
+        <a href="admin.html" class="nav-link active" style="display: inline-block; margin-top: 15px;">View Admin Status →</a>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module">
+    import { db, doc, getDoc, updateDoc } from "./firebase-config.js";
+
+    let currentDocId = null;
+
+    async function initPaymentPage() {
+      const urlParams = new URLSearchParams(window.location.search);
+      currentDocId = urlParams.get('docId') || sessionStorage.getItem('activeRegistrationId');
+
+      if (!currentDocId) {
+        alert("No active team registration session found. Please register your team details first.");
+        window.location.href = "index.html";
+        return;
+      }
+
+      try {
+        // Fetch strictly from 'player_registrations'
+        const docRef = doc(db, "player_registrations", currentDocId);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+          alert("Registration session expired or not found. Please register again.");
+          window.location.href = "index.html";
+          return;
+        }
+
+        console.log("Active Team Data loaded from Firebase:", docSnap.data());
+      } catch (error) {
+        console.error("Error fetching team details:", error);
+        alert("Failed to load registration details. Please check your network connection.");
+      }
+    }
+
+    initPaymentPage();
+
+    const paymentForm = document.getElementById('payForm');
+    if (paymentForm) {
+      paymentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const utrInput = document.getElementById('utrNo');
+        const utrValue = utrInput ? utrInput.value.trim() : '';
+
+        if (!utrValue || utrValue.length !== 12 || !/^\d+$/.test(utrValue)) {
+          alert("Please enter a valid 12-digit UPI / UTR Transaction ID.");
+          return;
+        }
+
+        const submitBtn = document.getElementById('btnPay');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Verifying...";
+        }
+
+        try {
+          // Update strictly in 'player_registrations'
+          const docRef = doc(db, "player_registrations", currentDocId);
+
+          await updateDoc(docRef, {
+            utr_number: utrValue,
+            payment_status: "Pending",
+            updatedAt: new Date().toISOString()
+          });
+
+          sessionStorage.removeItem('activeRegistrationId');
+          paymentForm.style.display = 'none';
+          document.getElementById('statusBox').style.display = 'block';
+
+          if (typeof confetti === 'function') {
+            confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 }
+            });
+          }
+        } catch (error) {
+          console.error("Error updating payment:", error);
+          alert(`Failed to record payment: ${error.message}`);
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Complete Registration →";
+          }
+        }
+      });
+    }
+  </script>
+
+</body>
+</html>

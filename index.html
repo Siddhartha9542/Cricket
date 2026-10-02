@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NOVARA FIESTA 2026 - Registration</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- TOP HEADER NAVIGATION BAR -->
+  <header>
+    <div class="logo-box">
+      <h1>NOVARA FIESTA 2026</h1>
+      <span>JNTUH MAHABUBABAD</span>
+    </div>
+    <nav class="nav-menu">
+      <a href="index.html" class="nav-link active">Register</a>
+      <a href="payment.html" class="nav-link">Pay Fee</a>
+      <a href="admin.html" class="nav-link">Admin Portal</a>
+    </nav>
+  </header>
+
+  <div class="main-wrapper">
+    <form id="registrationForm">
+
+      <!-- ================= PAGE 1: BANNER, CAPTAIN & TEAM DETAILS ================= -->
+      <div id="page1" class="page-step active-page">
+        
+        <!-- HERO BANNER IMAGE -->
+        <div class="hero-banner">
+          <img src="images/banner.png" alt="Cricket Unleashed Banner" onerror="this.onerror=null; this.src='banner.jpg';">
+        </div>
+
+        <div class="glass-card" style="margin-top: 16px;">
+          <div class="title-header">
+            <h2>🏆 01 / Team & Captain Registration</h2>
+          </div>
+
+          <!-- YEAR GROUP DROPDOWN -->
+          <div class="input-box">
+            <label>YEAR GROUP</label>
+            <div class="custom-select-wrapper" id="yearSelectWrapper">
+              <div class="custom-select-trigger">Select Year</div>
+              <div class="custom-options">
+                <div class="custom-option" data-value="1st Year">1st Year</div>
+                <div class="custom-option" data-value="2nd Year">2nd Year</div>
+                <div class="custom-option" data-value="3rd Year">3rd Year</div>
+                <div class="custom-option" data-value="4th Year">4th Year</div>
+              </div>
+            </div>
+            <input type="hidden" name="yearGroup" id="yearGroup" required>
+          </div>
+
+          <!-- BRANCH DROPDOWN -->
+          <div class="input-box">
+            <label>BRANCH</label>
+            <div class="custom-select-wrapper" id="branchSelectWrapper">
+              <div class="custom-select-trigger">Select Branch</div>
+              <div class="custom-options">
+                <div class="custom-option" data-value="CSE">CSE</div>
+                <div class="custom-option" data-value="ECE">ECE</div>
+                <div class="custom-option" data-value="EEE">EEE</div>
+                <div class="custom-option" data-value="CSD">CSD</div>
+                
+                <div class="custom-option" data-value="MECH">MECH</div>
+              </div>
+            </div>
+            <input type="hidden" name="branch" id="branch" required>
+          </div>
+
+          <!-- TEAM NAME INPUT -->
+          <div class="input-box">
+            <label for="teamName">TEAM NAME</label>
+            <input type="text" id="teamName" name="teamName" placeholder="e.g. Mahabubabad Strikers" required>
+          </div>
+
+          <!-- CAPTAIN NAME INPUT -->
+          <div class="input-box">
+            <label for="captainName">CAPTAIN NAME</label>
+            <input type="text" id="captainName" name="captainName" placeholder="Full Name" required>
+          </div>
+
+          <!-- WHATSAPP NUMBER INPUT -->
+          <div class="input-box">
+            <label for="whatsappNumber">WHATSAPP NUMBER</label>
+            <input type="tel" id="whatsappNumber" name="whatsappNumber" placeholder="10-digit Phone Number" maxlength="10" required>
+          </div>
+
+          <!-- NEXT PAGE BUTTON -->
+          <button type="button" class="btn-glow" onclick="goToPage(2)">Continue to Squad Roster →</button>
+        </div>
+      </div>
+
+      <!-- ================= PAGE 2: SQUAD DETAILS ================= -->
+      <div id="page2" class="page-step">
+        <div class="glass-card">
+          
+          <button type="button" class="btn-glow btn-secondary" onclick="goToPage(1)">← Back to Team Details</button>
+          
+          <div class="title-header">
+            <h2>🏏 02 / Squad Roster (11 XI + 3 Extra Substitutes)</h2>
+          </div>
+
+          <div id="squadContainer">
+            <!-- PLAYERS 1 TO 14 -->
+            <!-- Script will validate these sequentially -->
+            <script>
+              // Dynamically generate the 14 player inputs while preserving structure
+              document.write(Array.from({length: 14}, (_, i) => {
+                const num = i + 1;
+                const isSub = num > 11 ? ' (Substitute)' : '';
+                return `
+                  <div class="squad-player-card">
+                    <label class="player-label">${num}. Player${isSub}</label>
+                    <div class="input-box">
+                      <input type="text" name="player_${num}_name" placeholder="Player ${num} Full Name" ${num <= 11 ? 'required' : ''}>
+                    </div>
+                    <div class="input-box">
+                      <div class="custom-select-wrapper">
+                        <div class="custom-select-trigger">Select Player Role</div>
+                        <div class="custom-options">
+                          <div class="custom-option" data-value="Batsman">Batsman</div>
+                          <div class="custom-option" data-value="Bowler">Bowler</div>
+                          <div class="custom-option" data-value="All-Rounder">All-Rounder</div>
+                          <div class="custom-option" data-value="Wicket Keeper">Wicket Keeper</div>
+                        </div>
+                      </div>
+                      <input type="hidden" name="player_${num}_role" ${num <= 11 ? 'required' : ''}>
+                    </div>
+                  </div>
+                `;
+              }).join(''));
+            </script>
+          </div>
+
+          <button type="submit" id="submitBtn" class="btn-glow">Continue to Payment →</button>
+        </div>
+      </div>
+
+    </form>
+  </div>
+
+  <script type="module">
+    import { db, collection, addDoc } from "./firebase-config.js";
+
+    // 1. Multi-Page Controller
+    window.goToPage = function(pageNumber) {
+      if (pageNumber === 2) {
+        const yearGroup = document.getElementById('yearGroup').value;
+        const branch = document.getElementById('branch').value;
+        const teamName = document.getElementById('teamName').value;
+        const captainName = document.getElementById('captainName').value;
+        const whatsappNumber = document.getElementById('whatsappNumber').value;
+
+        if (!yearGroup || !branch || !teamName || !captainName || !whatsappNumber) {
+          alert('Please fill out all Team and Captain details before continuing.');
+          return;
+        }
+      }
+
+      document.querySelectorAll('.page-step').forEach(p => p.classList.remove('active-page'));
+      document.getElementById(`page${pageNumber}`).classList.add('active-page');
+      window.scrollTo(0, 0);
+    };
+
+    // 2. Custom Select Dropdown Handlers
+    document.addEventListener('click', (e) => {
+      const trigger = e.target.closest('.custom-select-trigger');
+      const option = e.target.closest('.custom-option');
+
+      if (trigger) {
+        const wrapper = trigger.closest('.custom-select-wrapper');
+        document.querySelectorAll('.custom-select-wrapper').forEach(w => {
+          if (w !== wrapper) w.classList.remove('open');
+        });
+        wrapper.classList.toggle('open');
+      } else if (option) {
+        const wrapper = option.closest('.custom-select-wrapper');
+        const hiddenInput = wrapper.nextElementSibling;
+        const triggerBtn = wrapper.querySelector('.custom-select-trigger');
+
+        triggerBtn.textContent = option.textContent;
+        hiddenInput.value = option.getAttribute('data-value');
+        wrapper.classList.remove('open');
+      } else {
+        document.querySelectorAll('.custom-select-wrapper').forEach(w => w.classList.remove('open'));
+      }
+    });
+
+    // 3. Form Submit Handler
+    const form = document.getElementById('registrationForm');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Processing Registration...';
+
+      const players = [];
+      for (let i = 1; i <= 14; i++) {
+        const pName = document.querySelector(`input[name="player_${i}_name"]`)?.value.trim() || '';
+        const pRole = document.querySelector(`input[name="player_${i}_role"]`)?.value.trim() || 'Player';
+        if (pName) {
+          players.push({ name: pName, role: pRole });
+        }
+      }
+
+      // Schema aligned with admin.html expectations
+      const registrationData = {
+        team_name: document.getElementById('teamName').value.trim(),
+        year_group: document.getElementById('yearGroup').value,
+        branch: document.getElementById('branch').value,
+        captain: {
+          name: document.getElementById('captainName').value.trim(),
+          phone: document.getElementById('whatsappNumber').value.trim()
+        },
+        players: players,
+        payment_status: 'Pending',
+        utr_number: '',
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        // Writing strictly to 'player_registrations'
+        const docRef = await addDoc(collection(db, 'player_registrations'), registrationData);
+        sessionStorage.setItem('activeRegistrationId', docRef.id);
+        window.location.href = `payment.html?docId=${docRef.id}`;
+      } catch (error) {
+        console.error("Firestore submission error:", error);
+        alert(`Submission Error: ${error.message}`);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Continue to Payment →';
+      }
+    });
+  </script>
+</body>
+</html>
